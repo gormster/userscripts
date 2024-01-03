@@ -162,6 +162,7 @@ export const validGrants = new Set([
 	"GM.saveTab",
 	"GM_xmlhttpRequest",
 	"GM.xmlHttpRequest",
+	"GM.registerMenuCommand",
 	"none",
 ]);
 

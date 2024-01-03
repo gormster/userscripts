@@ -178,6 +178,18 @@ function xhr(details) {
 	return response;
 }
 
+
+function registerMenuCommand( caption, commandFunc, accessKey ) {
+	const commandUuid = crypto.randomUUID();
+	this.registeredMenuCommands.set(commandUuid, commandFunc);
+	const message = {
+		name: "API_REGISTER_MENU_COMMAND",
+		scriptName: this.scriptName,
+		caption, commandUuid, accessKey
+	};
+	browser.runtime.sendMessage(message);
+}
+
 export default {
 	setValue,
 	getValue,
@@ -190,7 +202,7 @@ export default {
 	addStyle,
 	setClipboard,
 	// notification,
-	// registerMenuCommand,
+	registerMenuCommand,
 	// getResourceUrl,
 	xmlHttpRequest: xhr,
 	GM_xmlhttpRequest: xhr,

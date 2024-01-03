@@ -10,6 +10,9 @@ let cspFallbackAttempted = false;
 const label = randomLabel();
 const usTag = window.self === window.top ? "" : `(${label})`;
 
+// map of random command UUIDs to menu command functions
+const registeredMenuCommands = new Map();
+
 function randomLabel() {
 	const a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	const r = Math.random();
@@ -201,6 +204,12 @@ async function injection() {
 						US_filename: filename,
 					});
 					break;
+				case "registerMenuCommand":
+					userscript.apis.GM[method] = apis[method].bind({
+						scriptName: filename,
+						registeredMenuCommands
+					});
+					break;
 				case "GM_xmlhttpRequest":
 					userscript.apis[method] = apis[method];
 					break;
@@ -239,6 +248,13 @@ function listeners() {
 				}
 			}
 			console.error(`Couldn't find ${filename} code!`);
+		} else if (name === "MENU_COMMAND") {
+			const command = registeredMenuCommands.get(request.commandUuid);
+			if (command) {
+				command();
+			} else {
+				console.error("Failure: command is not callable", command);
+			}
 		}
 	});
 	// listen for CSP violations

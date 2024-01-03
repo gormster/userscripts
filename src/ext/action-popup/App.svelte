@@ -309,6 +309,16 @@
 		}
 		items = matches.matches;
 
+		const menuCommandMessage = {
+			name: "REFRESH_MENU_COMMANDS",
+			tabId: currentTab.id
+		};
+		const menuCommands = await browser.runtime.sendMessage(menuCommandMessage);
+		
+		for (let item of items) {
+			item.menuCommands = menuCommands.filter(c => c.scriptName === item.filename);
+		}
+
 		// get updates
 		const checkUpdates = await shouldCheckForUpdates();
 		if (checkUpdates) {
@@ -470,6 +480,15 @@
 		refreshView();
 	}
 
+	async function triggerMenuCommand(command) {
+		const currentTab = await browser.tabs.getCurrent();
+		browser.tabs.sendMessage(currentTab.id, {
+			name: "MENU_COMMAND",
+			...command
+		});
+		window.close();
+	}
+
 	onMount(async () => {
 		await initialize();
 		// run resize again for good measure
@@ -563,15 +582,28 @@
 	{:else}
 		<div class="items" class:disabled>
 			{#each list as item, i (item.filename)}
-				<PopupItem
-					background={getItemBackgroundColor(list, i)}
-					enabled={!item.disabled}
-					name={item.name}
-					subframe={item.subframe}
-					type={item.type}
-					request={!!item.request}
-					on:click={() => toggleItem(item)}
-				/>
+				<div class="item-wrapper">
+					<PopupItem
+						background={getItemBackgroundColor(list, i)}
+						enabled={!item.disabled}
+						name={item.name}
+						subframe={item.subframe}
+						type={item.type}
+						request={!!item.request}
+						on:click={() => toggleItem(item)}
+					/>
+					{#if !item.disabled}
+						{#each item.menuCommands as command, i (command.commandUuid)}
+						<div 
+							role="button" 
+							tabindex="0"
+							on:click={() => triggerMenuCommand(command)}
+							class="menu-command">
+							{command.caption}
+						</div>
+						{/each}
+					{/if}
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -731,5 +763,27 @@
 		line-height: 1.5rem;
 		padding: 0.5rem 0;
 		text-align: center;
+	}
+
+	.items .menu-command {
+		font-size: 0.8rem;
+		padding: 0.25rem;
+		padding-left: 1.5rem;
+		user-select: none;
+		-webkit-user-select: none;
+		cursor: pointer;
+	}
+
+	@media (hover: hover) {
+		.items .menu-command:hover {
+			background-color: rgb(255 255 255 / 0.075);
+		}
+	}
+	
+	.items .menu-command:focus {
+		outline: 0;
+		user-select: none;
+		-webkit-user-select: none;
+		background-color: rgb(255 255 255 / 0.075);
 	}
 </style>
