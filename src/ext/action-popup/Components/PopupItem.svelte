@@ -43,6 +43,13 @@
 		}
 	}
 
+	.item:focus {
+		outline: 0;
+		user-select: none;
+		-webkit-user-select: none;
+		background-color: rgb(255 255 255 / 0.075);
+	}
+
 	.item:active {
 		background-color: rgb(255 255 255 / 0.15);
 	}
