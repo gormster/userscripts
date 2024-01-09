@@ -178,16 +178,14 @@ function xhr(details) {
 	return response;
 }
 
-
-function registerMenuCommand( caption, commandFunc, accessKey ) {
+function registerMenuCommand(caption, commandFunc, accessKey) {
 	const commandUuid = crypto.randomUUID();
-	this.registeredMenuCommands.set(commandUuid, commandFunc);
-	const message = {
-		name: "API_REGISTER_MENU_COMMAND",
+	this.registeredMenuCommands.set(commandUuid, {
 		scriptName: this.scriptName,
-		caption, commandUuid, accessKey
-	};
-	browser.runtime.sendMessage(message);
+		caption,
+		commandFunc,
+		accessKey,
+	});
 }
 
 export default {

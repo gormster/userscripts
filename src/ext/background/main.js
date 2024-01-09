@@ -2,9 +2,6 @@ import { openExtensionPage } from "../shared/utils.js";
 import * as settingsStorage from "../shared/settings.js";
 import { connectNative, sendNativeMessage } from "../shared/native.js";
 
-// tab-id -> Array<{caption, commandUuid, accessKey}>
-const registeredMenuCommands = new Map();
-
 // first sorts files by run-at value, then by weight value
 function userscriptSort(a, b) {
 	// map the run-at values to numeric values
@@ -307,7 +304,6 @@ async function handleMessage(request, sender, sendResponse) {
 			response.files.css.sort((a, b) => {
 				return Number(a.weight) < Number(b.weight);
 			});
-			registeredMenuCommands.set(sender.tab.id, []);
 			// return sorted files for injection
 			return response;
 		}
@@ -461,24 +457,6 @@ async function handleMessage(request, sender, sendResponse) {
 				};
 			}
 			break;
-		}
-		case "API_REGISTER_MENU_COMMAND": {
-			console.debug("Register menu command called", request);
-			const tabCommands = registeredMenuCommands.get(sender.tab.id) ?? [];
-			let command = tabCommands.find(c => c.commandUuid == request.commandUuid);
-			if (!command) {
-				command = { commandUuid: request.commandUuid };
-				tabCommands.push(command);
-			}
-			command.scriptName = request.scriptName;
-			command.caption = request.caption;
-			command.accessKey = request.accessKey;
-			registeredMenuCommands.set(sender.tab.id, tabCommands);
-			break;
-		}
-		case "REFRESH_MENU_COMMANDS": {
-			const tabCommands = registeredMenuCommands.get(request.tabId) ?? [];
-			sendResponse(tabCommands);
 		}
 		case "REFRESH_SESSION_RULES": {
 			setSessionRules();

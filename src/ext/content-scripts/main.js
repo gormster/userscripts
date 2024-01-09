@@ -10,7 +10,8 @@ let cspFallbackAttempted = false;
 const label = randomLabel();
 const usTag = window.self === window.top ? "" : `(${label})`;
 
-// map of random command UUIDs to menu command functions
+// map of random command UUIDs to menu command objects
+// command objects have keys: scriptName, commandFunc, caption, accessKey
 const registeredMenuCommands = new Map();
 
 function randomLabel() {
@@ -207,7 +208,7 @@ async function injection() {
 				case "registerMenuCommand":
 					userscript.apis.GM[method] = apis[method].bind({
 						scriptName: filename,
-						registeredMenuCommands
+						registeredMenuCommands,
 					});
 					break;
 				case "GM_xmlhttpRequest":
@@ -229,7 +230,7 @@ async function injection() {
 
 function listeners() {
 	// listens for messages from background, popup, etc...
-	browser.runtime.onMessage.addListener((request) => {
+	browser.runtime.onMessage.addListener((request, _, sendResponse) => {
 		const name = request.name;
 		if (name === "CONTEXT_RUN") {
 			// from bg script when context-menu item is clicked
@@ -248,10 +249,21 @@ function listeners() {
 				}
 			}
 			console.error(`Couldn't find ${filename} code!`);
+		} else if (name == "REFRESH_MENU_COMMANDS") {
+			const tabCommands = Array.from(registeredMenuCommands.entries()).map(
+				([commandUuid, command]) => {
+					return {
+						commandUuid,
+						...command,
+					};
+				},
+			);
+			console.log(registeredMenuCommands);
+			sendResponse(tabCommands);
 		} else if (name === "MENU_COMMAND") {
 			const command = registeredMenuCommands.get(request.commandUuid);
 			if (command) {
-				command();
+				command.commandFunc();
 			} else {
 				console.error("Failure: command is not callable", command);
 			}

@@ -311,12 +311,18 @@
 
 		const menuCommandMessage = {
 			name: "REFRESH_MENU_COMMANDS",
-			tabId: currentTab.id
 		};
-		const menuCommands = await browser.runtime.sendMessage(menuCommandMessage);
-		
-		for (let item of items) {
-			item.menuCommands = menuCommands.filter(c => c.scriptName === item.filename);
+		const menuCommands = await browser.tabs.sendMessage(
+			currentTab.id,
+			menuCommandMessage,
+		);
+
+		if (menuCommands) {
+			for (let item of items) {
+				item.menuCommands = menuCommands.filter(
+					(c) => c.scriptName === item.filename,
+				);
+			}
 		}
 
 		// get updates
@@ -484,7 +490,7 @@
 		const currentTab = await browser.tabs.getCurrent();
 		browser.tabs.sendMessage(currentTab.id, {
 			name: "MENU_COMMAND",
-			...command
+			...command,
 		});
 		window.close();
 	}
@@ -594,13 +600,14 @@
 					/>
 					{#if !item.disabled}
 						{#each item.menuCommands as command, i (command.commandUuid)}
-						<div 
-							role="button" 
-							tabindex="0"
-							on:click={() => triggerMenuCommand(command)}
-							class="menu-command">
-							{command.caption}
-						</div>
+							<div
+								role="button"
+								tabindex="0"
+								on:click={() => triggerMenuCommand(command)}
+								class="menu-command"
+							>
+								{command.caption}
+							</div>
 						{/each}
 					{/if}
 				</div>
@@ -779,7 +786,7 @@
 			background-color: rgb(255 255 255 / 0.075);
 		}
 	}
-	
+
 	.items .menu-command:focus {
 		outline: 0;
 		user-select: none;
