@@ -258,7 +258,6 @@ function listeners() {
 					};
 				},
 			);
-			console.log(registeredMenuCommands);
 			sendResponse(tabCommands);
 		} else if (name === "MENU_COMMAND") {
 			const command = registeredMenuCommands.get(request.commandUuid);
