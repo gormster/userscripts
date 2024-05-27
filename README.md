@@ -24,7 +24,7 @@ An open-source userscript editor for Safari
 
 ## Installation
 
-Userscripts is available for iOS (+ipadOS) and macOS. For all versions, installation is done through [Apple's App Store](https://itunes.apple.com/us/app/userscripts/id1463298887). On macOS, versions prior to `4.x` were made available to download and install directly from the repository, but due to [changes in the way Apple allows developers to distribute apps built with the WebExtension API](https://github.com/quoid/userscripts/issues/154), that is no longer an option.
+Userscripts is available for iOS (iPadOS) and macOS. For all versions, installation is done through [Apple's App Store](https://itunes.apple.com/us/app/userscripts/id1463298887). On macOS, versions prior to `4.x` were made available to download and install directly from the repository, but due to [changes in the way Apple allows developers to distribute apps built with the WebExtension API](https://github.com/quoid/userscripts/issues/154), that is no longer an option.
 
 To run Userscripts on iOS you should be on iOS 15.1 or higher.
 
@@ -40,21 +40,40 @@ It's recommend to read this documentation and, if you have time, watch the follo
 
 Once the app is downloaded and installed the following steps should be taken:
 
-**iOS**
+### **iOS (iPadOS)**
 
-- Go to `Settings > Safari > Extensions > Userscripts`
-- Turn Userscripts `on`
-- For optimal experience it's recommended that you allow Userscripts for `All Websites`
-- Once the above is complete **open the containing app**
-- Click the "Set Userscripts Directory" button and select the directory, _within the Files.app_, where your userscripts are located and where you wish newly installed userscripts to be placed
-  - **Tip:** for optimal cross platform experience it's a good idea to use an iCloud folder for syncing between macOS and iOS
-  - **Note:** syncing between macOS and iOS is not immediate, it is sometimes necessary to open Files.app in order to applying changes made in macOS to be reflected in iOS - that includes userscript deletions, additions and edits
-- Once the directory is set you can close the containing app and open Safari.app
-- It **may be necessary** to apply further permissions and it's to `Always Allow` Userscripts for `All Websites`
+After installing the iOS App, you need two main steps to make the extension work:
 
-**macOS**
+- **Open the App and set a directory** (For saving and loading userscripts)
+  - After Userscripts for ios v1.5.0, a local default directory will be set automatically
+  - In earlier versions please click the `Set Userscripts Directory` button and select the directory
+- **Enable the extension in Safari** (And grant permissions)
+
+  - Manage extensions from Settings App (Settings > Safari > Extensions) or Safari App (`AA` button on iPhone, `extension-icon` on iPad, also where you open the extension's `popup` interface)
+  - For optimal experience it's recommended that you `Always Allow` Userscripts for `All Websites`
+
+> [!NOTE]
+>
+> The App cannot detect whether you have enabled the extension in Safari, therefore, the App prompt will not change after you enable the extension. Currently the App interface is only used to set or change the userscripts directory.
+>
+> You could select an iCloud folder for syncing scripts between macOS and iOS, but please note that there may be delays in synchronization, and you may encounter files be evictioned due to iCloud optimization, please refer to [#424](https://github.com/quoid/userscripts/issues/424).
+
+There are two main ways to install a user script from the iOS version:
+
+- Visit any `.user.js` URL in Safari, then open the extension `popup` and you will see an installation prompt
+- You can also save `.user.js` files directly to the Userscripts directory you set above
+
+> [!TIP]
+>
+> Both of the above work equally well in the macOS version.
+>
+> The iOS version does not include the script editor provided in the macOS version, but you can always edit script files in the directory you set directly on iOS. (use any third-party code editor apps, support in-place opening and editing)
+
+### **macOS**
 
 After installing Userscripts on macOS, you **do not** need to select a userscripts directory if you do not plan on syncing your userscripts between multiple devices. Instead you can choose to use the default directory, which is located at `~/User/Library/Containers/Userscripts/Data/Documents/scripts` - again, this is default (and automatic) behavior. You only need to select a new location if you want to store your userscripts elsewhere, which is especially useful if you are using an external code editor such as Sublime Text or VSCode.
+
+Refer to Apple's official guide page: [Use Safari extensions on your Mac](https://support.apple.com/102343)
 
 [**Here's a short clip showing how to easily create/add a userscript in Safari using this extension on macOS**](https://youtu.be/x1r3-L7pdYQ?t=14)
 
@@ -102,7 +121,7 @@ After installing Userscripts on macOS, you **do not** need to select a userscrip
 - **Show Toolbar Count** - displays a badge on the toolbar icon with a number that represents how many enabled scripts match the url for the page you are on
 - **Save Location** - where your file are currently located and being saved to (click the blue text to open location)
 - **Change Save Location (cogs icon)** - this button, located directly to the right of the save location, is a shortcut for opening the host app, which will allow you to change the save location
-- **Global Blacklist** - this input accepts a comma separated list of [`@match` patterns](https://developer.chrome.com/docs/extensions/mv3/match_patterns/), a page url that matches against a pattern in this list will be ignored for script injection
+- **Global Blacklist** - this input accepts a comma separated list of `@match` patterns ([Match pattern structure](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns#match_pattern_structure)), a page url that matches against a pattern in this list will be ignored for script injection
 
 ### Popup:
 
@@ -125,7 +144,7 @@ Userscripts Safari currently supports the following userscript metadata:
 - `@name` - This will be the name that displays in the sidebar and be used as the filename - you can _not_ use the same name for multiple files of the same type
 - `@description`- Use this to describe what your userscript does - this will be displayed in the sidebar - there is a setting to hide descriptions
 - `@icon` - This doesn't have a function with this userscript manager, but the **first value** provided in the metadata will be accessible in the `GM_/GM.info` object
-- `@match` - Domain match patterns - you can use several instances of this field if you'd like multiple domain matches - view [this article for more information on constructing patterns](https://developer.chrome.com/extensions/match_patterns)
+- `@match` - Domain match patterns - you can use several instances of this field if you'd like multiple domain matches - please refer to: [Match pattern structure](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns#match_pattern_structure)
   - **Note:** this extension only supports `http/s`
 - `@exclude-match` - Domain patterns where you do _not_ want the script to run
 - `@include` - Used to match against urls for injection, globs and regular expressions are allowed, [read more here](https://wiki.greasespot.net/Include_and_exclude_rules)
@@ -325,9 +344,7 @@ The quickest and easiest way to support the project is by [leaving a positive re
 
 The second best way to help out is to sign up to beta test new versions of the app. Since this extension values your privacy, and **does not collect any data from users**, it is difficult to gauge how the extension is being used. By signing up to be a beta tester it not only allows you to test upcoming features, but also gives me the opportunity to elicit direct feedback from real users.
 
-**[iOS Beta Sign Up Form](https://forms.gle/QB46uYQHVyCxULue9)**
-
-**[macOS Beta Sign Up Form](https://forms.gle/cUDtKg1ip4Vc9Xhc7)**
+**Please join and test the corresponding beta version in [releases](https://github.com/quoid/userscripts/releases) via the TestFlight public link.**
 
 ## Privacy Policy
 
@@ -335,6 +352,6 @@ Userscripts does not collect any data from its users nor monitor activities or a
 
 ## License
 
-Copyright (c) 2018-2023 Justin Wasack
+Copyright (c) 2018-2024 Justin Wasack
 
 Licensed under the [GNU General Public License v3.0](/LICENSE) license for all open source applications. A commercial license is required for all other applications.

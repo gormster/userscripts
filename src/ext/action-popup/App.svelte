@@ -29,7 +29,6 @@
 	let platform;
 	let initError;
 	let firstGuide;
-	let windowHeight = 0;
 	let header;
 	let warn;
 	let err;
@@ -37,17 +36,22 @@
 	let scriptInstalled;
 	let showInstallPrompt;
 	let showInstall;
-	let installUserscript; // url, content
+	/**
+	 * @typedef CheckedUserscript
+	 * @prop {import("webextension-polyfill").Tabs.Tab} tab - checked tab
+	 * @prop {URL} url - userjs/usercss url
+	 * @prop {"js"|"css"} type - userscript or userstyle
+	 * @prop {string} content - userjs/usercss content
+	 */
+	/** @type {CheckedUserscript} */
+	let checkedUserscript;
 	let installViewUserscript; // metadata
 	let installViewUserscriptError;
 	let showAll;
 	let allItems = [];
-	let resizeTimer;
 	let abort = false;
 
 	$: list = items.sort((a, b) => a.name.localeCompare(b.name));
-
-	$: if (platform) document.body.classList.add(platform);
 
 	function getItemBackgroundColor(elements, index) {
 		if (elements.length < 2) return null;
@@ -57,7 +61,9 @@
 	}
 
 	async function toggleExtension() {
-		await settingsStorage.set({ global_active: !active });
+		const keys = {};
+		keys["global_active"] = !active;
+		await settingsStorage.set(keys);
 		active = await settingsStorage.get("global_active");
 		// TODO: delete after migrating all related logic on the native
 		sendNativeMessage({ name: "TOGGLE_EXTENSION", active: String(active) });
@@ -158,41 +164,36 @@
 		}
 		// when an update check is run, a timestamp is saved to extension storage
 		// only check for updates every n milliseconds to avoid delaying popup load regularly
-		const checkInterval = 24 * 60 * 60 * 1000; // 24hr, 86400000
-		const timestampMs = Date.now();
-		let lastUpdateCheck = 0;
-		// check extension storage for saved key/val
-		// if there's an issue getting extension storage, skip the check
-		let lastUpdateCheckObj;
-		try {
-			lastUpdateCheckObj = await browser.storage.local.get(["lastUpdateCheck"]);
-		} catch (error) {
-			console.error(`Error checking extension storage ${error}`);
+		const days = await settingsStorage.get("scripts_update_check_interval");
+		// user set to never check
+		if (days === 0) {
+			console.info("user scripts update check disabled");
 			return false;
 		}
-		// if extension storage doesn't have key, run the check
-		// key/val will be saved after the update check runs
-		if (Object.keys(lastUpdateCheckObj).length === 0) {
+		const checkInterval = days * 24 * 60 * 60 * 1000; // 24hr, 86400000
+		const timestampMs = Date.now();
+		const checkLasttime = await settingsStorage.get(
+			"scripts_update_check_lasttime",
+		);
+		// If last check time does not exist, run the check
+		// new time will be saved after the update check runs
+		if (checkLasttime === 0) {
 			console.info("no last check saved, running update check");
 			return true;
 		}
 		// if the val is not a number, something went wrong, check anyway
 		// when update re-runs, new val of the proper type will be saved
-		if (!Number.isFinite(lastUpdateCheckObj.lastUpdateCheck)) {
+		if (!Number.isFinite(checkLasttime)) {
 			console.info("run check saved with wrong type, running update check");
 			return true;
 		}
-		// at this point it is known that key exists and value is a number
-		// update local var with the val saved to extension storage
-		lastUpdateCheck = lastUpdateCheckObj.lastUpdateCheck;
 		// if less than n milliseconds have passed, don't check
-		if (timestampMs - lastUpdateCheck < checkInterval) {
+		if (timestampMs - checkLasttime < checkInterval) {
 			console.info("not enough time has passed, not running update check");
 			return false;
 		}
-
 		console.info(
-			`${(timestampMs - lastUpdateCheck) / (1000 * 60 * 60)} hours have passed`,
+			`${(timestampMs - checkLasttime) / (1000 * 60 * 60)} hours have passed`,
 		);
 		console.info("running update check");
 		// otherwise run the check
@@ -258,9 +259,6 @@
 
 		// set toggle state
 		active = await settingsStorage.get("global_active");
-
-		// set popup height
-		resize();
 
 		// get matches
 		const currentTab = await browser.tabs.getCurrent();
@@ -332,7 +330,9 @@
 			try {
 				// save timestamp in ms to extension storage
 				const timestampMs = Date.now();
-				await browser.storage.local.set({ lastUpdateCheck: timestampMs });
+				const keys = {};
+				keys["scripts_update_check_lasttime"] = timestampMs;
+				await settingsStorage.set(keys);
 				abort = true;
 				updatesResponse = await sendNativeMessage({ name: "POPUP_UPDATES" });
 			} catch (error) {
@@ -353,15 +353,8 @@
 			abort = false;
 		}
 
-		// check if current page url is a userscript
-		if (strippedUrl.endsWith(".user.js")) {
-			// set checking state
-			scriptChecking = true;
-			// show checking banner
-			showInstallPrompt = "checking...";
-			// start async check
-			installCheck(currentTab);
-		}
+		// start async check
+		installCheck(currentTab);
 
 		loading = false;
 		disabled = false;
@@ -377,50 +370,53 @@
 		window.location.reload();
 	}
 
-	async function resize() {
-		if (!platform || platform === "macos") return;
-		clearTimeout(resizeTimer);
-		resizeTimer = setTimeout(async () => {
-			if (platform === "ipados") {
-				if (window.matchMedia("(max-width: 360px)").matches) {
-					// the popup window is no greater than 360px
-					// ensure body & main element have no leftover styling
-					main.removeAttribute("style");
-					document.body.removeAttribute("style");
-					return;
-				}
-				main.style.maxHeight = "unset";
-				document.body.style.width = "100vw";
-			}
-			// on ios and ipados (split view) programmatically set the height of the scrollable container
-			// first get the header height
-			const headerHeight = header.offsetHeight;
-			// then check if a warning or error is visible (ie. taking up height)
-			let addHeight = 0;
-			// if warn or error elements visible, also subtract that from applied height
-			if (warn) addHeight += warn.offsetHeight;
-			if (err) addHeight += err.offsetHeight;
-			windowHeight = window.outerHeight - (headerHeight + addHeight);
-			main.style.height = `${windowHeight}px`;
-			main.style.paddingBottom = `${headerHeight + addHeight}px`;
-		}, 25);
-	}
+	/** @type {import("svelte/elements").UIEventHandler<Window>} */
+	// async function resizeHandler(event) {
+	// 	if (platform !== "macos") {
+	// 		const viewport = event.currentTarget.visualViewport;
+	// 		console.debug(platform, viewport);
+	// 		// add max limits after the window size has been rendered
+	// 		// avoid display overflow when window shrinks dynamically
+	// 	}
+	// }
 
+	/**
+	 * Check if the current page contains a user script
+	 * @param {import("webextension-polyfill").Tabs.Tab} currentTab
+	 */
 	async function installCheck(currentTab) {
+		const tabUrl = new URL(currentTab.url);
+		/** @type {URL} */
+		let url;
+		// check if current page url is a userscript
+		if (tabUrl.pathname.endsWith(".user.js")) {
+			url = tabUrl;
+		} else {
+			const res = await browser.tabs.sendMessage(
+				currentTab.id,
+				"TAB_CLICK_USERJS",
+			);
+			if (!res) return;
+			url = new URL(res);
+		}
+		// set checking state
+		scriptChecking = true;
+		// show checking banner
+		showInstallPrompt = "checking...";
 		// refetch script from URL to avoid tampered DOM content
 		let res; // fetch response
 		try {
-			res = await fetch(currentTab.url);
+			res = await fetch(url);
 			if (!res.ok) throw new Error(`httpcode-${res.status}`);
 		} catch (error) {
 			console.error("Error fetching .user.js url", error);
-			errorNotification = "Fetching failed, refresh to retry.";
+			errorNotification = `Userscript fetching failed (${res.status})`;
 			showInstallPrompt = undefined;
 			return;
 		}
 		const content = await res.text();
 		// caching script data
-		installUserscript = { url: currentTab.url, content };
+		checkedUserscript = { tab: currentTab, url, type: "js", content };
 		// send native swift a message, parse metadata and check if installed
 		const response = await sendNativeMessage({
 			name: "POPUP_INSTALL_CHECK",
@@ -440,6 +436,7 @@
 			showInstallPrompt = response.success;
 		}
 		scriptChecking = false;
+		scriptInstalled || showInstallView();
 	}
 
 	async function showInstallView() {
@@ -458,11 +455,11 @@
 		// go back to main view
 		showInstall = false;
 		// double check before send install message
-		if (!installUserscript || !installUserscript.content) {
+		if (!checkedUserscript || !checkedUserscript.content) {
 			errorNotification = "Install failed: userscript missing";
 		}
 		const currentTab = await browser.tabs.getCurrent();
-		if (currentTab.url !== installUserscript.url) {
+		if (currentTab.id !== checkedUserscript.tab.id) {
 			errorNotification = "Install failed: tab changed unexpectedly";
 		}
 		if (errorNotification) {
@@ -473,7 +470,9 @@
 		// send native swift a message, which will start the install process
 		const response = await sendNativeMessage({
 			name: "POPUP_INSTALL_SCRIPT",
-			content: installUserscript.content,
+			url: checkedUserscript.url.href,
+			type: checkedUserscript.type,
+			content: checkedUserscript.content,
 		});
 		if (response.error) {
 			errorNotification = response.error;
@@ -497,8 +496,6 @@
 
 	onMount(async () => {
 		await initialize();
-		// run resize again for good measure
-		resize();
 	});
 
 	// handle native app messages
@@ -509,125 +506,19 @@
 			window.location.reload();
 		}
 	});
+
+	async function gotoExtensionPage() {
+		await openExtensionPage();
+		window.close();
+	}
+
+	/**
+	 * Temporary settings page entrance for beta test (iOS)
+	 * @todo new permanent button will be added via popup refactoring
+	 */
+	let showBetaNews = true;
 </script>
 
-<svelte:window on:resize={resize} />
-<div class="header" bind:this={header}>
-	<IconButton
-		icon={iconOpen}
-		title={"Open save location"}
-		on:click={openSaveLocation}
-		{disabled}
-	/>
-	<IconButton
-		icon={iconUpdate}
-		notification={!!updates.length}
-		on:click={() => (showUpdates = true)}
-		title={"Show updates"}
-		{disabled}
-	/>
-	<IconButton
-		icon={iconRefresh}
-		on:click={refreshView}
-		title={"Refresh view"}
-		{disabled}
-	/>
-	<Toggle
-		checked={active}
-		title={"Toggle injection"}
-		on:click={toggleExtension}
-		{disabled}
-	/>
-</div>
-{#if !active}
-	<!-- <div class="warn" bind:this={warn}>Injection disabled</div> -->
-{/if}
-{#if showInstallPrompt}
-	<div class="warn" class:done={scriptInstalled} bind:this={warn}>
-		Userscript
-		{#if scriptChecking}
-			{showInstallPrompt}
-		{:else}
-			{scriptInstalled ? "Installed" : "Detected"}:
-			<button on:click={showInstallView}>{showInstallPrompt}</button>
-		{/if}
-	</div>
-{/if}
-{#if errorNotification}
-	<div class="error" bind:this={err}>
-		{errorNotification}
-		<IconButton
-			icon={iconClear}
-			on:click={() => (errorNotification = undefined)}
-			title={"Clear error"}
-		/>
-	</div>
-{/if}
-<div class="main {rowColors || ''}" bind:this={main}>
-	{#if loading}
-		<Loader abortClick={abortUpdates} {abort} />
-	{:else if inactive}
-		<div class="none">Popup inactive on extension page</div>
-	{:else if firstGuide}
-		<div class="none">
-			<p>Welcome, first use please:&nbsp;</p>
-			<button class="link" on:click={openContainingApp}>
-				Open Userscripts App
-			</button>
-			<p>to complete the initialization</p>
-		</div>
-	{:else if initError}
-		<div class="none">
-			Something went wrong:&nbsp;
-			<button class="link" on:click={() => window.location.reload()}>
-				click to retry
-			</button>
-		</div>
-	{:else if items.length < 1}
-		<div class="none">No matched userscripts</div>
-	{:else}
-		<div class="items" class:disabled>
-			{#each list as item, i (item.filename)}
-				<div class="item-wrapper">
-					<PopupItem
-						background={getItemBackgroundColor(list, i)}
-						enabled={!item.disabled}
-						name={item.name}
-						subframe={item.subframe}
-						type={item.type}
-						request={!!item.request}
-						on:click={() => toggleItem(item)}
-					/>
-					{#if !item.disabled}
-						{#each item.menuCommands as command, i (command.commandUuid)}
-							<div
-								role="button"
-								tabindex="0"
-								on:click={() => triggerMenuCommand(command)}
-								class="menu-command"
-							>
-								{command.caption}
-							</div>
-						{/each}
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
-</div>
-{#if !inactive && platform === "macos"}
-	<div class="footer">
-		<button
-			class="link"
-			on:click={() => {
-				openExtensionPage();
-				window.close();
-			}}
-		>
-			Open Extension Page
-		</button>
-	</div>
-{/if}
 {#if showUpdates}
 	<View
 		headerTitle={"Updates"}
@@ -670,34 +561,165 @@
 	>
 		<AllItemsView {allItems} allItemsToggleItem={toggleItem} />
 	</View>
+{:else}
+	<div class="header" bind:this={header}>
+		<div class="buttons">
+			<IconButton
+				icon={iconOpen}
+				title={"Open save location"}
+				on:click={openSaveLocation}
+				{disabled}
+			/>
+			<IconButton
+				icon={iconUpdate}
+				infoDot={!!updates.length}
+				on:click={() => (showUpdates = true)}
+				title={"Show updates"}
+				{disabled}
+			/>
+			<IconButton
+				icon={iconRefresh}
+				on:click={refreshView}
+				title={"Refresh view"}
+				{disabled}
+			/>
+			<Toggle
+				checked={active}
+				title={"Toggle injection"}
+				on:click={toggleExtension}
+				{disabled}
+			/>
+		</div>
+		{#if !active}
+			<!-- <div class="warn" bind:this={warn}>Injection disabled</div> -->
+		{/if}
+		{#if showBetaNews && platform !== "macos"}
+			<div class="warn">
+				NEW: <button on:click={gotoExtensionPage}><b>Settings page</b></button>
+				is now available!
+				<IconButton
+					icon={iconClear}
+					on:click={() => (showBetaNews = false)}
+					title={"Close"}
+				/>
+			</div>
+		{/if}
+		{#if showInstallPrompt}
+			<div class="warn" class:done={scriptInstalled} bind:this={warn}>
+				Userscript
+				{#if scriptChecking}
+					{showInstallPrompt}
+				{:else}
+					{scriptInstalled ? "Installed" : "Detected"}:
+					<button on:click={showInstallView}>{showInstallPrompt}</button>
+				{/if}
+			</div>
+		{/if}
+		{#if errorNotification}
+			<div class="error" bind:this={err}>
+				{errorNotification}
+				<IconButton
+					icon={iconClear}
+					on:click={() => (errorNotification = undefined)}
+					title={"Clear error"}
+				/>
+			</div>
+		{/if}
+	</div>
+	<div class="main {rowColors || ''}" bind:this={main}>
+		{#if loading}
+			<Loader abortClick={abortUpdates} {abort} />
+		{:else if inactive}
+			<div class="none">Popup inactive on extension page</div>
+		{:else if firstGuide}
+			<div class="none">
+				<p>Welcome, first use please:&nbsp;</p>
+				<button class="link" on:click={openContainingApp}>
+					Open Userscripts App
+				</button>
+				<p>to complete the initialization</p>
+			</div>
+		{:else if initError}
+			<div class="none">
+				Something went wrong:&nbsp;
+				<button class="link" on:click={() => window.location.reload()}>
+					click to retry
+				</button>
+			</div>
+		{:else if items.length < 1}
+			<div class="none">No matched userscripts</div>
+		{:else}
+			<div class="items" class:disabled>
+				{#each list as item, i (item.filename)}
+				<div class="item-wrapper">
+					<PopupItem
+						background={getItemBackgroundColor(list, i)}
+						enabled={!item.disabled}
+						name={item.name}
+						subframe={item.subframe}
+						type={item.type}
+						request={!!item.request}
+						on:click={() => toggleItem(item)}
+					/>
+					{#if !item.disabled}
+						{#each item.menuCommands as command, i (command.commandUuid)}
+							<div
+								role="button"
+								tabindex="0"
+								on:click={() => triggerMenuCommand(command)}
+								class="menu-command"
+							>
+								{command.caption}
+							</div>
+						{/each}
+					{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+	{#if !inactive && platform === "macos"}
+		<div class="footer">
+			<button class="link" on:click={gotoExtensionPage}>
+				Open Extension Page
+			</button>
+		</div>
+	{/if}
 {/if}
 
 <style>
 	.header {
+		background-color: var(--color-bg-secondary);
+		position: sticky;
+		top: 0;
+		z-index: 1;
+	}
+
+	.header .buttons {
 		align-items: center;
 		border-bottom: 1px solid var(--color-black);
 		display: flex;
 		padding: 0.5rem 1rem calc(0.5rem - 1px) 1rem;
 	}
 
-	.header :global(button:nth-of-type(2)) {
+	.header .buttons :global(button:nth-of-type(2)) {
 		margin: 0 auto 0 1rem;
 	}
 
-	.header :global(button:nth-of-type(3)) {
+	.header .buttons :global(button:nth-of-type(3)) {
 		margin-right: 1rem;
 	}
 
-	.header :global(button:nth-of-type(1) svg) {
+	.header .buttons :global(button:nth-of-type(1) svg) {
 		transform: scale(0.75);
 	}
 
-	.header :global(button:nth-of-type(2) svg) {
+	.header .buttons :global(button:nth-of-type(2) svg) {
 		transform: scale(0.9);
 	}
 
-	.header :global(label) {
-		font-size: 1.25rem !important;
+	.header .buttons :global(button:nth-of-type(4)) {
+		--toggle-font-size: 1.25rem;
 	}
 
 	.error,
@@ -712,13 +734,15 @@
 		text-align: center;
 	}
 
-	.error :global(button) {
+	.error :global(button),
+	.warn :global(button:has(svg)) {
 		position: absolute;
 		right: 0.5rem;
 		top: 0;
 	}
 
-	.error :global(button svg) {
+	.error :global(button svg),
+	.warn :global(button svg) {
 		transform: scale(0.5);
 	}
 
@@ -742,13 +766,10 @@
 	}
 
 	.main {
+		flex-grow: 1;
 		min-height: 12.5rem;
 		overflow-y: auto;
 		position: relative;
-	}
-
-	:global(body:not(.ios) .main) {
-		max-height: 20rem;
 	}
 
 	.none {

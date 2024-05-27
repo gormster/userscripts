@@ -1,4 +1,7 @@
-import { openExtensionPage } from "../shared/utils.js";
+import {
+	contentScriptRegistration,
+	openExtensionPage,
+} from "../shared/utils.js";
 import * as settingsStorage from "../shared/settings.js";
 import { connectNative, sendNativeMessage } from "../shared/native.js";
 
@@ -69,8 +72,9 @@ function setClipboard(data, type = "text/plain") {
 }
 
 async function setBadgeCount() {
-	const clearBadge = () => browser.browserAction.setBadgeText({ text: "" });
+	const clearBadge = () => browser.browserAction.setBadgeText({ text: null });
 	// @todo until better introduce in ios, only set badge on macOS
+	// set a text badge or an empty string in visionOS will cause the extension's icon to no longer be displayed
 	const platform = await getPlatform();
 	if (platform !== "macos") return clearBadge();
 	// @todo settingsStorage.get("global_exclude_match")
@@ -78,8 +82,8 @@ async function setBadgeCount() {
 		"global_active",
 		"toolbar_badge_count",
 	]);
-	if (settings.global_active === false) return clearBadge();
-	if (settings.toolbar_badge_count === false) return clearBadge();
+	if (settings["global_active"] === false) return clearBadge();
+	if (settings["toolbar_badge_count"] === false) return clearBadge();
 
 	const currentTab = await browser.tabs.getCurrent();
 	// no active tabs exist (user closed all windows)
@@ -240,6 +244,7 @@ async function addContextMenuItem(userscript) {
 			patterns[index] = `${url.protocol}//${url.hostname}${pathname}`;
 		} catch (error) {
 			// prevent breaking when non-url pattern present
+			console.error(error);
 		}
 	});
 
@@ -285,7 +290,12 @@ async function nativeChecks() {
 	return true;
 }
 
-// handles messages sent with browser.runtime.sendMessage
+/**
+ * handles messages sent with browser.runtime.sendMessage
+ * @see {@link https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/onMessage#listener}
+ * @type {Parameters<typeof browser.runtime.onMessage.addListener>[0]}
+ * @param {(response: any) => void} sendResponse send a response to the message
+ */
 async function handleMessage(request, sender, sendResponse) {
 	switch (request.name) {
 		case "REQ_USERSCRIPTS": {
@@ -297,6 +307,9 @@ async function handleMessage(request, sender, sendResponse) {
 			// send request to swift layer to provide code for page url
 			const message = { name: "REQ_USERSCRIPTS", url, isTop };
 			const response = await sendNativeMessage(message);
+			if (import.meta.env.MODE === "development") {
+				console.debug("REQ_USERSCRIPTS", message, response);
+			}
 			// if request failed, send error to content script for logging
 			if (response.error) return sendResponse(response);
 			// sort files
@@ -321,7 +334,7 @@ async function handleMessage(request, sender, sendResponse) {
 		}
 		case "API_ADD_STYLE": {
 			const tabId = sender.tab.id;
-			/** @type {{code: string, cssOrigin: "user"|"author"}} */
+			/** @type {import("webextension-polyfill").ExtensionTypes.InjectDetails} */
 			const details = { code: request.css, cssOrigin: "user" };
 			return browser.tabs.insertCSS(tabId, details);
 		}
@@ -333,7 +346,7 @@ async function handleMessage(request, sender, sendResponse) {
 					// if tabData is null, can still parse it and return that
 					tab = JSON.parse(tabData);
 				} catch (error) {
-					console.error("failed to parse tab data for getTab");
+					console.error("failed to parse tab data for getTab", error);
 				}
 			} else {
 				console.error("unable to deliver tab due to empty tab id");
@@ -466,10 +479,19 @@ async function handleMessage(request, sender, sendResponse) {
 			getContextMenuItems();
 			break;
 		}
+		case "WEB_USERJS_POPUP": {
+			const currentTab = await browser.tabs.getCurrent();
+			if (currentTab.id === sender.tab.id) {
+				browser.browserAction.openPopup();
+			}
+			break;
+		}
 	}
 }
 browser.runtime.onInstalled.addListener(async () => {
-	nativeChecks();
+	await nativeChecks();
+	const enable = await settingsStorage.get("augmented_userjs_install");
+	await contentScriptRegistration(enable);
 });
 browser.runtime.onStartup.addListener(async () => {
 	setSessionRules();
@@ -493,10 +515,10 @@ browser.webNavigation.onCompleted.addListener(setBadgeCount);
 
 // handle native app messages
 const port = connectNative();
-port.onMessage.addListener((message) => {
+port.onMessage.addListener(async (message) => {
 	// console.info(message); // DEBUG
 	if (message.name === "SAVE_LOCATION_CHANGED") {
-		openExtensionPage();
+		await openExtensionPage();
 		if (message?.userInfo?.returnApp === true) {
 			sendNativeMessage({ name: "OPEN_APP" });
 		}

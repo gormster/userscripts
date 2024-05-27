@@ -1,10 +1,11 @@
 <script>
-	import { onMount, tick } from "svelte";
+	import { onMount } from "svelte";
 	import { blur } from "svelte/transition";
 	import { items, log, notifications, settings, state } from "./store.js";
 	import Sidebar from "./Components/Sidebar/Sidebar.svelte";
 	import Editor from "./Components/Editor/Editor.svelte";
 	import Settings from "./Components/Settings.svelte";
+	import ModalWrapper from "./Components/ModalWrapper.svelte";
 	import Notification from "./Components/Notification.svelte";
 	import logo from "../shared/img/logo.svg?raw";
 	import { connectNative, sendNativeMessage } from "../shared/native.js";
@@ -13,7 +14,6 @@
 
 	$: $log.some((item) => {
 		if (!logger.includes(item)) {
-			// eslint-disable-next-line no-console -- not arbitrary console command
 			console[item.type](item.message);
 			logger.push(item);
 		}
@@ -25,20 +25,13 @@
 			return e.preventDefault();
 		}
 	}
-	// app proportions can get messed up when opening/closing new tabs
-	async function windowResize() {
-		document.documentElement.style.height = "100vh";
-		// if tick is omitted, the style change won't apply
-		await tick();
-		document.documentElement.removeAttribute("style");
-	}
 
 	// currently inactive, but could be used to globally prevent auto text replacement in app
 	// function preventAutoTextReplacements(e) {
-	//     if (e.inputType === "insertReplacementText" && e.data === ". ") {
-	//         e.preventDefault();
-	//         e.target.value += " ";
-	//     }
+	// 	if (e.inputType === "insertReplacementText" && e.data === ". ") {
+	// 		e.preventDefault();
+	// 		e.target.value += " ";
+	// 	}
 	// }
 
 	onMount(async () => {
@@ -54,11 +47,12 @@
 		if (files.error) return console.error(files.error);
 		items.set(files);
 		state.remove("items-loading");
+		state.loadUrlState();
 	});
 
 	// handle native app messages
-	const port = connectNative();
-	port.onMessage.addListener((message) => {
+	const nativePort = connectNative();
+	nativePort.onMessage.addListener((message) => {
 		// console.info(message); // DEBUG
 		if (message.name === "SAVE_LOCATION_CHANGED") {
 			window.location.reload();
@@ -66,7 +60,7 @@
 	});
 </script>
 
-<svelte:window on:keydown={preventKeyCommands} on:resize={windowResize} />
+<svelte:window on:keydown={preventKeyCommands} />
 
 {#if $state.includes("init")}
 	<div class="initializer" out:blur={{ duration: 350 }}>
@@ -88,7 +82,11 @@
 		<Notification on:click={() => notifications.remove(item.id)} {item} />
 	{/each}
 </ul>
-{#if $state.includes("settings")}<Settings />{/if}
+{#if $state.includes("settings")}
+	<ModalWrapper closeHandler={() => state.remove("settings")} let:navRegister>
+		<Settings platform="macos" {nativePort} {navRegister} />
+	</ModalWrapper>
+{/if}
 
 <style>
 	.initializer {

@@ -1,4 +1,4 @@
-import apis from "./api.js";
+import USAPI from "./api.js";
 
 // code received from background page will be stored in this variable
 // code referenced again when strict CSPs block initial injection attempt
@@ -56,34 +56,36 @@ function injectJS(userscript) {
 	if (injectInto === "auto" && (userscript.fallback || cspFallbackAttempted)) {
 		injectInto = "content";
 		console.warn(`Attempting fallback injection for ${name}`);
-	} else if (window.self === window.top) {
-		console.info(`Injecting ${name} %c(js)`, "color: #fff600");
+	}
+	const world = injectInto === "content" ? "content" : "page";
+	if (window.self === window.top) {
+		console.info(`Injecting: ${name} %c(js/${world})`, "color: #fff600");
 	} else {
 		console.info(
-			`Injecting ${name} %c(js)%c - %cframe(${label})(${window.location})`,
+			`Injecting: ${name} %c(js/${world})%c - %cframe(${label})(${window.location})`,
 			"color: #fff600",
 			"color: inherit",
 			"color: #006fff",
 		);
 	}
-	if (injectInto !== "content") {
+	if (world === "page") {
 		const div = document.createElement("div");
 		div.style.display = "none";
 		const shadowRoot = div.attachShadow({ mode: "closed" });
-		document.body.append(div);
 		const tag = document.createElement("script");
 		tag.textContent = code;
 		shadowRoot.append(tag);
+		(document.body ?? document.head ?? document.documentElement).append(div);
 	} else {
 		try {
-			// eslint-disable-next-line no-new-func
-			return Function(
+			Function(
 				`{${Object.keys(userscript.apis).join(",")}}`,
 				code,
 			)(userscript.apis);
 		} catch (error) {
 			console.error(`"${filename}" error:`, error);
 		}
+		return;
 	}
 }
 
@@ -141,6 +143,9 @@ async function injection() {
 	const response = await browser.runtime.sendMessage({
 		name: "REQ_USERSCRIPTS",
 	});
+	if (import.meta.env.MODE === "development") {
+		console.debug("REQ_USERSCRIPTS", response);
+	}
 	// cancel injection if errors detected
 	if (!response || response.error) {
 		console.error(response?.error || "REQ_USERSCRIPTS returned undefined");
@@ -190,8 +195,8 @@ async function injection() {
 		for (let j = 0; j < grants.length; j++) {
 			const grant = grants[j];
 			const method = grant.split(".")[1] || grant.split(".")[0];
-			// ensure API method exists in apis object
-			if (!Object.keys(apis).includes(method)) continue;
+			// ensure API method exists in USAPI object
+			if (!Object.keys(USAPI).includes(method)) continue;
 			// add granted methods
 			switch (method) {
 				case "info":
@@ -201,7 +206,7 @@ async function injection() {
 				case "setValue":
 				case "deleteValue":
 				case "listValues":
-					userscript.apis.GM[method] = apis[method].bind({
+					userscript.apis.GM[method] = USAPI[method].bind({
 						US_filename: filename,
 					});
 					break;
@@ -212,10 +217,10 @@ async function injection() {
 					});
 					break;
 				case "GM_xmlhttpRequest":
-					userscript.apis[method] = apis[method];
+					userscript.apis[method] = USAPI[method];
 					break;
 				default:
-					userscript.apis.GM[method] = apis[method];
+					userscript.apis.GM[method] = USAPI[method];
 			}
 		}
 		// triage userjs item for injection
@@ -273,9 +278,13 @@ function listeners() {
 }
 
 async function initialize() {
-	const results = await browser.storage.local.get("US_GLOBAL_ACTIVE");
-	if (results?.US_GLOBAL_ACTIVE === false)
-		return console.info("Userscripts off");
+	// avoid duplicate injection of content scripts
+	if (window["CS_ENTRY_USERSCRIPTS"]) return;
+	window["CS_ENTRY_USERSCRIPTS"] = 1;
+	// check user settings
+	const key = "US_GLOBAL_ACTIVE";
+	const results = await browser.storage.local.get(key);
+	if (results[key] === false) return console.info("Userscripts off");
 	// start the injection process and add the listeners
 	injection();
 	listeners();
