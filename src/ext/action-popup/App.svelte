@@ -310,17 +310,19 @@
 		const menuCommandMessage = {
 			name: "REFRESH_MENU_COMMANDS",
 		};
-		const menuCommands = await browser.tabs.sendMessage(
+		let menuCommands = await browser.tabs.sendMessage(
 			currentTab.id,
 			menuCommandMessage,
 		);
 
-		if (menuCommands) {
-			for (let item of items) {
-				item.menuCommands = menuCommands.filter(
-					(c) => c.scriptName === item.filename,
-				);
-			}
+		if (!Array.isArray(menuCommands)) {
+			menuCommands = [];
+		}
+
+		for (let item of items) {
+			item.menuCommands = menuCommands.filter(
+				(c) => c.scriptName === item.filename,
+			);
 		}
 
 		// get updates
