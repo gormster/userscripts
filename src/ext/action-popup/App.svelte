@@ -651,28 +651,34 @@
 		{:else}
 			<div class="items" class:disabled>
 				{#each list as item, i (item.filename)}
-				<div class="item-wrapper">
-					<PopupItem
-						background={getItemBackgroundColor(list, i)}
-						enabled={!item.disabled}
-						name={item.name}
-						subframe={item.subframe}
-						type={item.type}
-						request={!!item.request}
-						on:click={() => toggleItem(item)}
-					/>
-					{#if !item.disabled}
-						{#each item.menuCommands as command, i (command.commandUuid)}
-							<div
-								role="button"
-								tabindex="0"
-								on:click={() => triggerMenuCommand(command)}
-								class="menu-command"
-							>
-								{command.caption}
-							</div>
-						{/each}
-					{/if}
+					<div class="item-wrapper">
+						<PopupItem
+							background={getItemBackgroundColor(list, i)}
+							enabled={!item.disabled}
+							name={item.name}
+							subframe={item.subframe}
+							type={item.type}
+							request={!!item.request}
+							on:click={() => toggleItem(item)}
+						/>
+						{#if !item.disabled}
+							{#each item.menuCommands as command (command.commandUuid)}
+								<div
+									role="button"
+									tabindex="0"
+									on:click={() => triggerMenuCommand(command)}
+									on:keydown={(evt) =>
+										evt.key === "Enter" ? triggerMenuCommand(command) : void 0}
+									class="menu-command"
+								>
+									{command.caption}
+									<!-- TODO: figure out a good way to enable accessKey shortcuts -->
+									<!-- <span class="command-shortcut">
+										&#8984;{command.accessKey.toUpperCase()}
+									</span> -->
+								</div>
+							{/each}
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -795,11 +801,16 @@
 
 	.items .menu-command {
 		font-size: 0.8rem;
-		padding: 0.25rem;
-		padding-left: 1.5rem;
+		padding: 0.25rem 1.5rem;
 		user-select: none;
 		-webkit-user-select: none;
 		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+	}
+
+	.items .menu-command .command-shortcut {
+		color: var(--text-color-secondary);
 	}
 
 	@media (hover: hover) {
