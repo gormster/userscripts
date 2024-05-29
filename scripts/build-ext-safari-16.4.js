@@ -39,6 +39,7 @@ const defineConfig = {
 	},
 };
 const sourcemap = process.env.BETA ? true : false;
+const minify = !sourcemap;
 
 /**
  * Empty resources directory
@@ -65,6 +66,7 @@ cp("public/ext/safari-16.4", SAFARI_EXT_RESOURCES);
 				input,
 				output: { entryFileNames: "[name].js" },
 			},
+			minify,
 		},
 	});
 });
@@ -85,6 +87,7 @@ build({
 			input: { background: "src/ext/background/main.js" },
 			output: { entryFileNames: "[name].js" },
 		},
+		minify,
 	},
 });
 
@@ -105,5 +108,6 @@ build({
 			},
 			output: { entryFileNames: "[name].js" },
 		},
+		minify,
 	},
 });

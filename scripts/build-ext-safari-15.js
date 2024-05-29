@@ -40,6 +40,7 @@ const defineConfig = {
 	},
 };
 const sourcemap = process.env.BETA ? true : false;
+const minify = !sourcemap;
 
 /**
  * Empty resources directory
@@ -59,6 +60,7 @@ cp("public/ext/safari-15", SAFARI_EXT_RESOURCES);
 		...defineConfig,
 		build: {
 			outDir: `${SAFARI_EXT_RESOURCES}/dist/content-scripts/`,
+			minify,
 			emptyOutDir: false,
 			copyPublicDir: false,
 			sourcemap,
@@ -77,6 +79,7 @@ build({
 		outDir: `${SAFARI_EXT_RESOURCES}/dist/`,
 		emptyOutDir: false,
 		copyPublicDir: false,
+		minify,
 		sourcemap,
 		rollupOptions: {
 			input: { background: "src/ext/background/main.js" },
@@ -94,6 +97,7 @@ build({
 		outDir: `${SAFARI_EXT_RESOURCES}/dist/`,
 		emptyOutDir: false,
 		sourcemap,
+		minify,
 		rollupOptions: {
 			input: ["entry-ext-action-popup.html", "entry-ext-extension-page.html"],
 		},
