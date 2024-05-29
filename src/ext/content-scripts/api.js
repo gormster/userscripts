@@ -1,3 +1,5 @@
+import { uniqueId } from "../shared/utils";
+
 async function setValue(key, value) {
 	if (typeof key !== "string" || !key.length) {
 		return Promise.reject(new Error("setValue invalid key arg"));
@@ -179,7 +181,8 @@ function xhr(details) {
 }
 
 function registerMenuCommand(caption, commandFunc, accessKey) {
-	const commandUuid = crypto.randomUUID();
+	// Use uniqueId instead of crypto.randomUUID because that doesn't work in non-secure contexts
+	const commandUuid = uniqueId();
 	this.registeredMenuCommands.set(commandUuid, {
 		scriptName: this.scriptName,
 		caption,
