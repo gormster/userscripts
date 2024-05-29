@@ -211,7 +211,7 @@ async function injection() {
 					});
 					break;
 				case "registerMenuCommand":
-					userscript.apis.GM[method] = apis[method].bind({
+					userscript.apis.GM[method] = USAPI[method].bind({
 						scriptName: filename,
 						registeredMenuCommands,
 					});
@@ -268,8 +268,6 @@ function listeners() {
 			const command = registeredMenuCommands.get(request.commandUuid);
 			if (command) {
 				command.commandFunc();
-			} else {
-				console.error("Failure: command is not callable", command);
 			}
 		}
 	});
