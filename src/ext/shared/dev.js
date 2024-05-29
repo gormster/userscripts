@@ -83,6 +83,16 @@ const files = [
 	...Array.from({ length: 7 }, () => generateFile("js")),
 ];
 
+const menuCommands = [
+	{
+		commandUuid: uniqueId(),
+		scriptName: files[0].filename,
+		commandFunc: () => alert("hello, world"),
+		caption: "Hello, world",
+		accessKey: "h",
+	},
+];
+
 /** @type {"ios"|"macos"} */
 const platform = "macos";
 
@@ -436,6 +446,9 @@ const _browser = {
 			if (message.name === "DEMO_MSG") {
 				response = {};
 				// response.error = "something went wrong (dev)";
+			}
+			if (message.name === "REFRESH_MENU_COMMANDS") {
+				response = menuCommands;
 			}
 			if (!responseCallback) {
 				return new Promise((resolve) => {
